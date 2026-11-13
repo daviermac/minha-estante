@@ -98,7 +98,19 @@ Os testes usam uma implementação isolada de `AuthRepository` para verificar in
 
 Verificação local em 02/10/2026: `dart format` executado, 8 testes aprovados e `flutter build web` concluído. `flutter analyze` foi tentado, mas o analisador não conseguiu criar seu diretório de estado `.dartServer` por uma restrição de acesso do ambiente; portanto, não há resultado de análise estática concluída. A compilação Android e a autenticação contra um projeto Firebase real ainda não foram verificadas.
 
-## Capturas e entrega
+## Capturas
+
+Capturas feitas com o Firebase Authentication Emulator (`--dart-define=USE_AUTH_EMULATOR=true`):
+
+| Login | Cadastro | Estante (botão Sair) |
+|---|---|---|
+| ![](docs/screenshots/01_login.png) | ![](docs/screenshots/04_cadastro_preenchido.png) | ![](docs/screenshots/06_estante_com_livro.png) |
+| **Erro de login** | **Recuperação de senha** | **Após logout** |
+| ![](docs/screenshots/09_login_erro.png) | ![](docs/screenshots/12_recuperar_ok.png) | ![](docs/screenshots/08_apos_logout.png) |
+
+Verificação em 02/10/2026: `flutter analyze` sem problemas e 8 testes aprovados.
+
+## Entrega
 
 Após conectar o Firebase e testar, adicione capturas reais de:
 

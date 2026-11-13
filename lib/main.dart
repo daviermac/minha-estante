@@ -24,6 +24,10 @@ class _BootstrapState extends State<_Bootstrap> {
       await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform);
     }
+    // Opcional: --dart-define=USE_AUTH_EMULATOR=true para testes locais.
+    if (const bool.fromEnvironment('USE_AUTH_EMULATOR')) {
+      await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+    }
     await FirebaseAuth.instance.setLanguageCode('pt-BR');
     return FirebaseAuthRepository(FirebaseAuth.instance);
   }

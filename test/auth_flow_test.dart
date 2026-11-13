@@ -285,7 +285,7 @@ void main() {
     await tester.tap(find.text('Salvar livro'));
     await tester.pumpAndSettle();
     expect(livros.of('u1').single.titulo, 'Memórias Póstumas');
-    expect(find.text('1 livro cadastrado'), findsOneWidget);
+    expect(find.textContaining('1 livro cadastrado'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5)); // fecha o SnackBar
     await tester.pumpAndSettle();
     // UPDATE
@@ -353,6 +353,48 @@ void main() {
     await tester.tap(find.text('Tentar novamente'));
     await tester.pumpAndSettle();
     expect(find.text('Sua estante está vazia'), findsOneWidget);
+  });
+
+  testWidgets('Busca e filtro de status restringem a lista', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await livros.create(
+        'u1',
+        const Livro(
+            titulo: 'Dom Casmurro',
+            autor: 'Machado de Assis',
+            genero: 'Romance',
+            status: StatusLeitura.concluido,
+            nota: 5));
+    await livros.create(
+        'u1',
+        const Livro(
+            titulo: 'Iracema',
+            autor: 'José de Alencar',
+            genero: 'Romance',
+            status: StatusLeitura.queroLer,
+            nota: 3));
+    final repo = TestAuthRepository()
+      ..session = const AuthSession('u1', 'a@exemplo.com');
+    addTearDown(repo.changes.close);
+    await tester.pumpWidget(app(repo));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2 livros cadastrados · 1 concluído'),
+        findsOneWidget);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Concluído'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dom Casmurro'), findsOneWidget);
+    expect(find.text('Iracema'), findsNothing);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Todos'));
+    await tester.enterText(find.byType(TextField).first, 'alencar');
+    await tester.pumpAndSettle();
+    expect(find.text('Iracema'), findsOneWidget);
+    expect(find.text('Dom Casmurro'), findsNothing);
+    await tester.enterText(find.byType(TextField).first, 'xyz');
+    await tester.pumpAndSettle();
+    expect(find.text('Nenhum livro encontrado com esses filtros.'),
+        findsOneWidget);
   });
 
   test('Livro converte para o documento do Firestore', () {

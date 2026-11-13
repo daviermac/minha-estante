@@ -5,7 +5,11 @@ import '../../domain/livro.dart';
 const _ink = Color(0xFF1B3040);
 const _teal = Color(0xFF148E8A);
 
-class EstanteTela extends StatelessWidget {
+/// Tela principal da área autenticada: lista os livros do usuário.
+///
+/// É StatefulWidget porque guarda o estado local da busca e do filtro.
+/// Os livros em si chegam prontos do Firestore pela [LibraryArea].
+class EstanteTela extends StatefulWidget {
   const EstanteTela({
     super.key,
     required this.livros,
@@ -29,26 +33,115 @@ class EstanteTela extends StatelessWidget {
   final bool saindo;
 
   @override
+  State<EstanteTela> createState() => _EstanteTelaState();
+}
+
+class _EstanteTelaState extends State<EstanteTela> {
+  String _busca = '';
+  StatusLeitura? _filtro; // null = todos os status
+
+  /// Aplica busca (título ou autor) e filtro de status sobre a lista.
+  List<Livro> _filtrar(List<Livro> livros) {
+    final termo = _busca.trim().toLowerCase();
+    return livros.where((livro) {
+      final combinaStatus = _filtro == null || livro.status == _filtro;
+      final combinaBusca = termo.isEmpty ||
+          livro.titulo.toLowerCase().contains(termo) ||
+          livro.autor.toLowerCase().contains(termo);
+      return combinaStatus && combinaBusca;
+    }).toList();
+  }
+
+  String _resumo(List<Livro> livros) {
+    if (livros.isEmpty) return 'Organize e acompanhe suas próximas leituras.';
+    final lidos =
+        livros.where((l) => l.status == StatusLeitura.concluido).length;
+    final total = livros.length == 1
+        ? '1 livro cadastrado'
+        : '${livros.length} livros cadastrados';
+    return '$total · $lidos concluído${lidos == 1 ? '' : 's'}';
+  }
+
+  /// Decide o que mostrar: erro, loading, estado vazio ou a lista.
+  Widget _conteudo() {
+    if (widget.erro != null) {
+      return _EstadoErro(
+          mensagem: widget.erro!, onTentarNovamente: widget.onTentarNovamente);
+    }
+    final livros = widget.livros;
+    if (livros == null) {
+      return const Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Carregando sua estante…'),
+        ]),
+      );
+    }
+    if (livros.isEmpty) return _EstadoVazio(onAdicionar: widget.onAdicionar);
+
+    final visiveis = _filtrar(livros);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          decoration: const InputDecoration(
+            labelText: 'Buscar por título ou autor',
+            prefixIcon: Icon(Icons.search),
+          ),
+          onChanged: (texto) => setState(() => _busca = texto),
+        ),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          ChoiceChip(
+            label: const Text('Todos'),
+            selected: _filtro == null,
+            onSelected: (_) => setState(() => _filtro = null),
+          ),
+          for (final status in StatusLeitura.values)
+            ChoiceChip(
+              label: Text(status.label),
+              selected: _filtro == status,
+              onSelected: (_) => setState(() => _filtro = status),
+            ),
+        ]),
+        const SizedBox(height: 16),
+        Expanded(
+          child: visiveis.isEmpty
+              ? const Center(
+                  child: Text('Nenhum livro encontrado com esses filtros.'))
+              : ListView.separated(
+                  itemCount: visiveis.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) => _LivroCard(
+                    livro: visiveis[index],
+                    onTap: () => widget.onAbrirLivro(visiveis[index]),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final livros = this.livros ?? const <Livro>[];
-    final carregando = this.livros == null && erro == null;
     return Scaffold(
       appBar: AppBar(title: const Text('Minha Estante'), actions: [
         TextButton.icon(
-          onPressed: saindo ? null : onSair,
-          icon: saindo
+          onPressed: widget.saindo ? null : widget.onSair,
+          icon: widget.saindo
               ? const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
                       strokeWidth: 2, color: Colors.white))
               : const Icon(Icons.logout, color: Colors.white),
-          label: Text(saindo ? 'Saindo…' : 'Sair',
+          label: Text(widget.saindo ? 'Saindo…' : 'Sair',
               style: const TextStyle(color: Colors.white)),
         ),
       ]),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: onAdicionar,
+        onPressed: widget.onAdicionar,
         icon: const Icon(Icons.add),
         label: const Text('Cadastrar livro'),
       ),
@@ -58,7 +151,7 @@ class EstanteTela extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(email, style: const TextStyle(color: _teal)),
+              Text(widget.email, style: const TextStyle(color: _teal)),
               const SizedBox(height: 12),
               Text('Sua biblioteca pessoal',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -66,76 +159,62 @@ class EstanteTela extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       )),
               const SizedBox(height: 6),
-              Text(
-                carregando || erro != null || livros.isEmpty
-                    ? 'Organize e acompanhe suas próximas leituras.'
-                    : '${livros.length} ${livros.length == 1 ? 'livro cadastrado' : 'livros cadastrados'}',
-                style: TextStyle(color: Colors.blueGrey.shade700),
-              ),
-              const SizedBox(height: 24),
+              Text(_resumo(widget.livros ?? const []),
+                  style: TextStyle(color: Colors.blueGrey.shade700)),
+              const SizedBox(height: 20),
+              Expanded(child: _conteudo()),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LivroCard extends StatelessWidget {
+  const _LivroCard({required this.livro, required this.onTap});
+
+  final Livro livro;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Colors.white,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const Icon(Icons.menu_book_rounded, color: _teal, size: 36),
+              const SizedBox(width: 14),
               Expanded(
-                child: erro != null
-                    ? _EstadoErro(
-                        mensagem: erro!, onTentarNovamente: onTentarNovamente)
-                    : carregando
-                        ? const Center(
-                            child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                CircularProgressIndicator(),
-                                SizedBox(height: 16),
-                                Text('Carregando sua estante…'),
-                              ]))
-                        : livros.isEmpty
-                            ? _EstadoVazio(onAdicionar: onAdicionar)
-                            : ListView.separated(
-                                itemCount: livros.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 12),
-                                itemBuilder: (context, index) {
-                                  final livro = livros[index];
-                                  return Card(
-                                    margin: EdgeInsets.zero,
-                                    color: Colors.white,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(12),
-                                      onTap: () => onAbrirLivro(livro),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Row(
-                                          children: [
-                                            const Icon(Icons.menu_book_rounded,
-                                                color: _teal, size: 36),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(livro.titulo,
-                                                      style: const TextStyle(
-                                                        color: _ink,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 16,
-                                                      )),
-                                                  const SizedBox(height: 4),
-                                                  Text(livro.autor),
-                                                  const SizedBox(height: 8),
-                                                  _StatusChip(
-                                                      status: livro.status),
-                                                ],
-                                              ),
-                                            ),
-                                            const Icon(Icons.chevron_right),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(livro.titulo,
+                        style: const TextStyle(
+                          color: _ink,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        )),
+                    const SizedBox(height: 4),
+                    Text(livro.autor),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      _StatusChip(status: livro.status),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.star_rounded,
+                          size: 18, color: Color(0xFFCF8D25)),
+                      Text(' ${livro.nota}'),
+                    ]),
+                  ],
+                ),
               ),
+              const Icon(Icons.chevron_right),
             ],
           ),
         ),

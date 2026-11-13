@@ -27,10 +27,9 @@ class _BootstrapState extends State<_Bootstrap> {
       await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform);
     }
-    // Opcional: --dart-define=USE_FIREBASE_EMULATOR=true para testes locais
+    // Opcional: --dart-define=USE_FIREBASE_EMULATOR=true para testar localmente
     // com o Firebase Local Emulator Suite (Auth 9099, Firestore 8085).
-    if (const bool.fromEnvironment('USE_FIREBASE_EMULATOR') ||
-        const bool.fromEnvironment('USE_AUTH_EMULATOR')) {
+    if (const bool.fromEnvironment('USE_FIREBASE_EMULATOR')) {
       await FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
       FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8085);
     }

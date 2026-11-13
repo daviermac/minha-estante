@@ -1,28 +1,23 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
-// Substitua este arquivo com `flutterfire configure` para o projeto real.
-// Alternativamente, configure os identificadores web por --dart-define-from-file.
+/// Configuração do projeto Firebase "minha-estante-daviermac".
+///
+/// Estes identificadores são públicos (ficam no código de qualquer app web);
+/// quem protege os dados são o Firebase Authentication e as Security Rules.
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
-    const apiKey = String.fromEnvironment('FIREBASE_API_KEY');
-    const appId = String.fromEnvironment('FIREBASE_APP_ID');
-    const senderId = String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
-    const projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
-    const authDomain = String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
-    if (!kIsWeb ||
-        apiKey.isEmpty ||
-        appId.isEmpty ||
-        senderId.isEmpty ||
-        projectId.isEmpty) {
-      throw StateError('Execute flutterfire configure antes de iniciar.');
-    }
-    return const FirebaseOptions(
-      apiKey: apiKey,
-      appId: appId,
-      messagingSenderId: senderId,
-      projectId: projectId,
-      authDomain: authDomain,
-    );
+    if (kIsWeb) return web;
+    throw UnsupportedError(
+        'Esta versão está configurada para Web. Rode com: flutter run -d chrome');
   }
+
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyCKLvpWbgkvxDrI0wTBC8U6PCHX4dBceB4',
+    appId: '1:1071189844113:web:d38d79fafb5f0958c69f30',
+    messagingSenderId: '1071189844113',
+    projectId: 'minha-estante-daviermac',
+    authDomain: 'minha-estante-daviermac.firebaseapp.com',
+    storageBucket: 'minha-estante-daviermac.firebasestorage.app',
+  );
 }

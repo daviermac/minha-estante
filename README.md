@@ -1,128 +1,146 @@
-# Minha Estante — Trabalho 2
+# Minha Estante — Trabalho 3
 
-**Aluno:** Davi Renato dos Santos Paixão Moreira.  
-**Tema:** biblioteca pessoal e acompanhamento de leituras.  
-**Tecnologias:** Flutter, Dart e Firebase Authentication.
+**Aluno:** Davi Renato dos Santos Paixão Moreira
+**Tema:** biblioteca pessoal e acompanhamento de leituras
+**Tecnologias:** Flutter, Dart, Firebase Authentication e Cloud Firestore
 
-**Repositório público:** https://github.com/daviermac/minha-estante
+**Repositório:** https://github.com/daviermac/minha-estante
 
-Evolução do mesmo aplicativo do Trabalho 1. Foram preservados o modelo Livro, o tema e as telas de listagem, cadastro de livro e detalhes. A nova camada de autenticação fica antes da biblioteca.
+O Minha Estante ajuda o leitor a organizar os livros que quer ler, está lendo ou já concluiu. O app foi evoluído em etapas no mesmo repositório: interface e modelo no T1, autenticação no T2 e persistência na nuvem com CRUD por usuário no T3.
 
-## Funcionalidades
+## Funcionalidades acumuladas
 
-- Cadastro, login e recuperação de senha por e-mail pelo Firebase Authentication.
-- Confirmação de senha, validação de e-mail e senha mínima de 6 caracteres. Políticas adicionais do projeto Firebase também são respeitadas pelo servidor.
-- Indicador de carregamento e bloqueio de envios duplicados durante operações.
-- Erros de credenciais, conta existente, rede e limites de tentativas traduzidos para português.
-- Estado da sessão acompanhado por `authStateChanges()`, inclusive sessão restaurada pelo SDK.
-- Botão **Sair** no canto superior direito da tela Minha Estante.
-- Ao perder a sessão, toda a navegação interna é removida. O usuário seguinte começa com sua própria lista vazia.
-- Cadastro e consulta de livros em memória, com validação e confirmação, como no Trabalho 1.
+**Trabalho 1 — base Flutter**
+- Modelo `Livro` (título, autor, gênero, status de leitura e nota de 1 a 5).
+- Telas de lista, cadastro com validação e detalhes do livro.
 
-As senhas são enviadas ao Firebase pelo SDK. Não são gravadas em arquivos, banco próprio, logs ou estado global. Os campos do formulário são limpos após sucesso e descartados ao sair da tela.
+**Trabalho 2 — autenticação**
+- Cadastro, login, logout e recuperação de senha com Firebase Authentication.
+- Validação de formulários, loading, mensagens de erro em português.
+- Proteção da área interna pelo estado de autenticação (`authStateChanges()`).
 
-## Estado da configuração
+**Trabalho 3 — Cloud Firestore e CRUD por usuário**
+- **CREATE:** o formulário cria um documento em `users/{uid}/books`.
+- **READ:** a estante é carregada do Firestore com `snapshots()` e se atualiza sozinha após cada alteração.
+- **UPDATE:** botão *Editar* nos detalhes; o mesmo formulário abre preenchido e grava as alterações.
+- **DELETE:** botão *Excluir* com diálogo de confirmação; o documento é removido do Firestore.
+- Loading na carga da lista e nos botões de salvar/excluir, com bloqueio de envios duplicados.
+- Estado vazio com atalho para cadastrar o primeiro livro.
+- Erros de permissão, conexão e operação traduzidos para mensagens compreensíveis, com opção de tentar novamente.
+- Security Rules por UID, com validação dos campos, e testes automatizados das regras.
 
-**A conexão com o projeto Firebase do aluno ainda precisa ser configurada.** O código usa o SDK real; não há login de demonstração no aplicativo. Sem os identificadores do projeto, a inicialização não libera acesso à biblioteca.
+## Estrutura de dados no Firestore
 
-Este repositório foi criado na etapa do Trabalho 2. O primeiro commit importa exatamente o código da entrega anterior, preservado no pacote original do Trabalho 1; os commits seguintes registram a evolução para autenticação. As capturas finais ainda precisam ser adicionadas após a conexão real ao Firebase.
+```text
+users/{uid}/books/{bookId}
+```
+
+O `uid` vem sempre da sessão do Firebase Authentication, nunca de um campo da tela. Exemplo de documento:
+
+```json
+{
+  "title": "Dom Casmurro",
+  "author": "Machado de Assis",
+  "genre": "Romance",
+  "status": "lendo",          // queroLer | lendo | concluido
+  "rating": 4,                // 1 a 5
+  "createdAt": "Timestamp do servidor",
+  "updatedAt": "Timestamp do servidor"
+}
+```
+
+## Regras de segurança
+
+Arquivo [`firestore.rules`](firestore.rules):
+
+- Leitura e exclusão somente quando `request.auth.uid == userId`.
+- Criação e edição somente pelo dono e com dados válidos: apenas os campos esperados, textos não vazios, `status` dentro da lista, `rating` inteiro de 1 a 5 e datas geradas pelo servidor. `createdAt` não pode ser alterado na edição.
+- Qualquer outro caminho do banco é negado (`allow read, write: if false`).
+
+Testes das regras em [`test/firestore_rules`](test/firestore_rules), executados no Firebase Emulator:
+
+```sh
+cd test/firestore_rules
+npm install
+npm test
+```
+
+Resultado: 6 de 6 testes aprovados. A conta A lê, cria, edita e exclui os próprios livros. A conta B e usuários sem login recebem `PERMISSION_DENIED` ao tentar ler, criar, editar ou excluir livros da conta A. Dados inválidos e campos extras são recusados.
+
+## Organização do código
+
+```text
+lib/
+  main.dart                       inicialização do Firebase (Auth + Firestore)
+  app.dart                        tema e proteção pelo estado da sessão
+  firebase_options.dart           configuração por plataforma
+  data/auth_repository.dart       Firebase Authentication e tradução de erros
+  data/livro_repository.dart      CRUD no Firestore (users/{uid}/books) e tradução de erros
+  domain/livro.dart               modelo Livro e conversão para o documento
+  ui/auth/                        login, cadastro, recuperação e controller
+  ui/library/library_area.dart    escuta da estante, navegação interna e ações do CRUD
+  ui/library/library_screens.dart lista, formulário (criar/editar) e detalhes (editar/excluir)
+firestore.rules                   regras de segurança
+firebase.json                     regras e portas dos emuladores
+test/auth_flow_test.dart          12 testes de widget (autenticação e CRUD)
+test/firestore_rules/             testes das Security Rules
+```
+
+As telas não chamam o Firestore diretamente: tudo passa pela interface `LivroRepository`.
 
 ## Configurar e executar
 
-Código compilado com Flutter 3.47.6 e Dart 3.13.5. As pastas de plataforma web e Android estão incluídas. Na pasta que contém este README:
+Requisitos: Flutter 3.47+, Node.js e Firebase CLI (`npm install -g firebase-tools`).
 
 ```sh
 flutter pub get
 ```
 
-Caso ainda faltem as pastas `web/` e `android/`, gere-as uma vez:
+### Com um projeto Firebase real
+
+1. No [Firebase Console](https://console.firebase.google.com/), crie o projeto, habilite **Authentication → E-mail/senha** e crie o **Firestore Database**.
+2. Conecte o app: `dart pub global activate flutterfire_cli` e depois `flutterfire configure`. Outra opção, só para web, é preencher `firebase-config.local.json` a partir de `firebase-config.example.json`.
+3. Publique as regras: `firebase use <id-do-projeto>` e depois `firebase deploy --only firestore:rules`.
+4. Execute: `flutter run -d chrome`. Se usou o arquivo local, adicione `--dart-define-from-file=firebase-config.local.json`.
+
+### Com o Firebase Local Emulator Suite (sem conta Google)
 
 ```sh
-flutter create --empty --platforms=web,android --project-name minha_estante .
+firebase emulators:start --only auth,firestore --project demo-minha-estante
+flutter run -d chrome --dart-define-from-file=firebase-config.emulator.json
 ```
 
-1. Abra o [Firebase Console](https://console.firebase.google.com/) e crie ou selecione o projeto Minha Estante.
-2. Em **Authentication → Método de login**, habilite **E-mail/senha** e salve.
-3. Instale as ferramentas oficiais e conecte a conta:
+O emulador já carrega o `firestore.rules`, então as regras valem nos testes locais.
 
-```sh
-npm install -g firebase-tools
-firebase login
-dart pub global activate flutterfire_cli
-flutterfire configure
-```
+## Capturas (Firebase Emulator)
 
-Escolha o seu projeto e as plataformas web e/ou Android. O comando substitui `lib/firebase_options.dart` com os identificadores reais. Não use chaves de conta de serviço no app.
-
-```sh
-flutter run -d chrome
-```
-
-Para testar no Android, use um aparelho/emulador configurado e execute `flutter run`. O projeto Firebase precisa ter a configuração da plataforma Android gerada pelo FlutterFire.
-
-### Alternativa de configuração somente web
-
-Cadastre um app web no Firebase Console. Copie `firebase-config.example.json` para `firebase-config.local.json` e preencha as cinco propriedades com `apiKey`, `appId`, `messagingSenderId`, `projectId` e `authDomain` da configuração web. Depois:
-
-```sh
-flutter run -d chrome --dart-define-from-file=firebase-config.local.json
-```
-
-Se o provedor exigir domínio autorizado, confira o domínio de teste em **Authentication → Configurações → Domínios autorizados**. Use somente o domínio em que vai executar o app.
-
-## Organização
-
-```text
-lib/
-  main.dart                       inicialização do Firebase e erro de abertura
-  app.dart                        tema e proteção pelo estado da sessão
-  firebase_options.dart           configuração por plataforma
-  data/auth_repository.dart       chamadas ao Firebase e tradução de erros
-  domain/livro.dart                modelo do Trabalho 1
-  ui/auth/auth_controller.dart    operação assíncrona, loading e validações
-  ui/auth/auth_screen.dart        login, cadastro e recuperação
-  ui/library/library_area.dart    navegação interna e livros da sessão
-  ui/library/library_screens.dart telas preservadas do Trabalho 1
-test/auth_flow_test.dart          testes locais com repositório de teste
-```
+| Estado vazio | CREATE | READ (lista) |
+|---|---|---|
+| ![](docs/screenshots/t3/01_vazio.png) | ![](docs/screenshots/t3/03_create_ok.png) | ![](docs/screenshots/t3/04_read_lista.png) |
+| **UPDATE (formulário)** | **UPDATE (salvo)** | **Reaberto: dados persistidos** |
+| ![](docs/screenshots/t3/06_update_form.png) | ![](docs/screenshots/t3/07_update_ok.png) | ![](docs/screenshots/t3/08_reaberto_persistido.png) |
+| **DELETE (confirmação)** | **DELETE (concluído)** | **Conta B: só os próprios livros** |
+| ![](docs/screenshots/t3/09_delete_dialog.png) | ![](docs/screenshots/t3/10_delete_ok.png) | ![](docs/screenshots/t3/12_contaB_lista.png) |
+| **Loading ao salvar** | **Erro de conexão** | |
+| ![](docs/screenshots/t3/13_loading_salvando.png) | ![](docs/screenshots/t3/14_erro_rede.png) | |
 
 ## Verificação
 
 ```sh
 dart format lib test
-flutter analyze
-flutter test
+flutter analyze        # No issues found
+flutter test           # 12 testes aprovados
+cd test/firestore_rules && npm test   # 6 testes de regras aprovados
 ```
 
-Os testes usam uma implementação isolada de `AuthRepository` para verificar interface e navegação. Eles não comprovam a configuração do serviço Firebase. A conferência real deve incluir criar uma conta, sair, entrar novamente, recarregar com sessão ativa e solicitar um e-mail de recuperação.
+## Limitações conhecidas
 
-Verificação local em 02/10/2026: `dart format` executado, 8 testes aprovados e `flutter build web` concluído. `flutter analyze` foi tentado, mas o analisador não conseguiu criar seu diretório de estado `.dartServer` por uma restrição de acesso do ambiente; portanto, não há resultado de análise estática concluída. A compilação Android e a autenticação contra um projeto Firebase real ainda não foram verificadas.
+- As capturas e os testes foram feitos no Firebase Local Emulator Suite (Auth + Firestore), não em um projeto Firebase na nuvem.
+- No modo emulador web, a sessão não é restaurada ao recarregar a página. Por isso o teste de "fechar e abrir o app" foi feito com uma nova sessão do navegador e novo login; os dados continuaram lá.
+- Se a conexão cair durante um salvamento, o app mostra o erro após 20 s. O SDK do Firestore pode manter a gravação na fila e enviá-la quando a conexão voltar.
 
-## Capturas
+## Próximas evoluções (Trabalho 4)
 
-Capturas feitas com o Firebase Authentication Emulator (`--dart-define=USE_AUTH_EMULATOR=true`):
-
-| Login | Cadastro | Estante (botão Sair) |
-|---|---|---|
-| ![](docs/screenshots/01_login.png) | ![](docs/screenshots/04_cadastro_preenchido.png) | ![](docs/screenshots/06_estante_com_livro.png) |
-| **Erro de login** | **Recuperação de senha** | **Após logout** |
-| ![](docs/screenshots/09_login_erro.png) | ![](docs/screenshots/12_recuperar_ok.png) | ![](docs/screenshots/08_apos_logout.png) |
-
-Verificação em 02/10/2026: `flutter analyze` sem problemas e 8 testes aprovados.
-
-## Entrega
-
-Após conectar o Firebase e testar, adicione capturas reais de:
-
-1. Login.
-2. Cadastro de conta.
-3. Recuperação de senha com a confirmação da solicitação.
-4. Minha Estante autenticada, com o botão **Sair** visível.
-
-Inclua no PDF final essas capturas, seu nome, nome do aplicativo, tema, explicação do fluxo e link clicável do mesmo repositório do Trabalho 1. As capturas não foram incluídas antecipadamente para não apresentar fluxos simulados como autenticação real.
-
-## Limitações e Trabalho 3
-
-Os livros ainda não são persistidos: fechar o app, recarregar a página ou sair da conta limpa a lista. O estado de autenticação é gerenciado e persistido pelo Firebase. A próxima evolução prevista é Cloud Firestore com dados vinculados ao UID do usuário e CRUD completo.
-
-Referências: [configuração FlutterFire](https://firebase.google.com/docs/flutter/setup), [autenticação por e-mail/senha](https://firebase.google.com/docs/auth/flutter/password-auth).
+- Busca e filtros por status/gênero, ordenação por título ou nota.
+- Capa do livro e progresso de leitura (páginas).
+- Publicação em um projeto Firebase na nuvem e testes no Android.

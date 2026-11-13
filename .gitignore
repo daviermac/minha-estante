@@ -9,3 +9,5 @@ android/.gradle/
 *.iml
 .idea/
 firebase-config.local.json
+node_modules/
+*-debug.log

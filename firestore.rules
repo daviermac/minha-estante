@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Minha Estante — cada usuário só acessa users/{seuUid}/books/*.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Valida os campos gravados pelo app (sem campos extras).
+    function isValidBook(data) {
+      return data.keys().hasOnly(['title', 'author', 'genre', 'status',
+                                  'rating', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() > 0 && data.title.size() <= 200
+        && data.author is string && data.author.size() > 0 && data.author.size() <= 200
+        && data.genre is string && data.genre.size() > 0 && data.genre.size() <= 100
+        && data.status in ['queroLer', 'lendo', 'concluido']
+        && data.rating is int && data.rating >= 1 && data.rating <= 5
+        && data.updatedAt == request.time;
+    }
+
+    match /users/{userId}/books/{bookId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId)
+        && isValidBook(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner(userId)
+        && isValidBook(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isOwner(userId);
+    }
+
+    // Qualquer outro caminho é negado.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

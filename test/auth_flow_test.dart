@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minha_estante/app.dart';
 import 'package:minha_estante/data/auth_repository.dart';
+import 'package:minha_estante/data/livro_repository.dart';
 import 'package:minha_estante/domain/livro.dart';
 import 'package:minha_estante/ui/auth/auth_controller.dart';
 
@@ -52,32 +53,80 @@ class TestAuthRepository implements AuthRepository {
   Future<void> logout() async => emit(null);
 }
 
+// Somente para testes: guarda livros por UID, como users/{uid}/books.
+class TestLivroRepository implements LivroRepository {
+  final _dados = <String, List<Livro>>{};
+  final _changes = StreamController<String>.broadcast();
+  var _seq = 0;
+  LivroFailure? failure;
+  Completer<void>? pending;
+
+  List<Livro> of(String uid) => _dados[uid] ?? const [];
+
+  @override
+  Stream<List<Livro>> watch(String uid) async* {
+    if (failure != null) throw failure!;
+    yield of(uid);
+    yield* _changes.stream.where((u) => u == uid).map((_) => of(uid));
+  }
+
+  Future<void> _write(String uid, List<Livro> Function(List<Livro>) f) async {
+    if (pending != null) await pending!.future;
+    if (failure != null) throw failure!;
+    _dados[uid] = f(of(uid));
+    _changes.add(uid);
+  }
+
+  @override
+  Future<void> create(String uid, Livro livro) =>
+      _write(uid, (l) => [livro.copyWith(id: 'b${++_seq}'), ...l]);
+
+  @override
+  Future<void> update(String uid, Livro livro) =>
+      _write(uid, (l) => [for (final x in l) x.id == livro.id ? livro : x]);
+
+  @override
+  Future<void> delete(String uid, String id) =>
+      _write(uid, (l) => l.where((x) => x.id != id).toList());
+}
+
+late TestLivroRepository livros;
+
+Widget app(AuthRepository repo) =>
+    MinhaEstanteApp(repository: repo, livros: livros);
+
+Future<void> preencherLivro(WidgetTester tester, String titulo,
+    {String status = 'Lendo', String nota = '4 estrelas'}) async {
+  await tester.enterText(find.byType(TextFormField).at(0), titulo);
+  await tester.enterText(find.byType(TextFormField).at(1), 'Machado de Assis');
+  await tester.enterText(find.byType(TextFormField).at(2), 'Romance');
+  await tester
+      .ensureVisible(find.byType(DropdownButtonFormField<StatusLeitura>));
+  await tester.tap(find.byType(DropdownButtonFormField<StatusLeitura>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(status).last);
+  await tester.pumpAndSettle();
+  await tester.ensureVisible(find.byType(DropdownButtonFormField<int>));
+  await tester.tap(find.byType(DropdownButtonFormField<int>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(nota).last);
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  setUp(() => livros = TestLivroRepository());
+
   testWidgets(
-      'Livro cadastrado aparece na lista e nos detalhes; logout limpa os dados',
+      'Livro cadastrado aparece na lista e nos detalhes; outra conta não o vê',
       (tester) async {
     final repo = TestAuthRepository()
       ..session = const AuthSession('u1', 'teste@exemplo.com');
     addTearDown(repo.changes.close);
-    await tester.pumpWidget(MinhaEstanteApp(repository: repo));
+    await tester.pumpWidget(app(repo));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextFormField).at(0), 'Dom Casmurro');
-    await tester.enterText(
-        find.byType(TextFormField).at(1), 'Machado de Assis');
-    await tester.enterText(find.byType(TextFormField).at(2), 'Romance');
-    await tester
-        .ensureVisible(find.byType(DropdownButtonFormField<StatusLeitura>));
-    await tester.tap(find.byType(DropdownButtonFormField<StatusLeitura>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Lendo').last);
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byType(DropdownButtonFormField<int>));
-    await tester.tap(find.byType(DropdownButtonFormField<int>));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('4 estrelas').last);
-    await tester.pumpAndSettle();
+    await preencherLivro(tester, 'Dom Casmurro');
     await tester.ensureVisible(find.text('Salvar livro'));
     await tester.tap(find.text('Salvar livro'));
     await tester.pumpAndSettle();
@@ -110,7 +159,7 @@ void main() {
   testWidgets('Formulário inválido não chama autenticação', (tester) async {
     final repo = TestAuthRepository();
     addTearDown(repo.changes.close);
-    await tester.pumpWidget(MinhaEstanteApp(repository: repo));
+    await tester.pumpWidget(app(repo));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Entrar'));
     await tester.pump();
@@ -125,7 +174,7 @@ void main() {
       ..pending = Completer<void>()
       ..failure = const AuthFailure('Confira seu e-mail e senha.');
     addTearDown(repo.changes.close);
-    await tester.pumpWidget(MinhaEstanteApp(repository: repo));
+    await tester.pumpWidget(app(repo));
     await tester.pumpAndSettle();
     await tester.enterText(
         find.byType(TextFormField).at(0), 'teste@exemplo.com');
@@ -146,7 +195,7 @@ void main() {
   testWidgets('Cadastro exige confirmação e abre área interna', (tester) async {
     final repo = TestAuthRepository();
     addTearDown(repo.changes.close);
-    await tester.pumpWidget(MinhaEstanteApp(repository: repo));
+    await tester.pumpWidget(app(repo));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Não tenho conta. Criar conta'));
     await tester.pumpAndSettle();
@@ -171,7 +220,7 @@ void main() {
       (tester) async {
     final repo = TestAuthRepository();
     addTearDown(repo.changes.close);
-    await tester.pumpWidget(MinhaEstanteApp(repository: repo));
+    await tester.pumpWidget(app(repo));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Esqueci minha senha'));
     await tester.pumpAndSettle();
@@ -190,7 +239,7 @@ void main() {
     final repo = TestAuthRepository()
       ..session = const AuthSession('u1', 'teste@exemplo.com');
     addTearDown(repo.changes.close);
-    await tester.pumpWidget(MinhaEstanteApp(repository: repo));
+    await tester.pumpWidget(app(repo));
     await tester.pumpAndSettle();
     expect(find.text('Sua biblioteca pessoal'), findsOneWidget);
     await tester.tap(find.text('Sair'));
@@ -203,7 +252,7 @@ void main() {
     final repo = TestAuthRepository()
       ..session = const AuthSession('u1', 'teste@exemplo.com');
     addTearDown(repo.changes.close);
-    await tester.pumpWidget(MinhaEstanteApp(repository: repo));
+    await tester.pumpWidget(app(repo));
     await tester.pumpAndSettle();
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pumpAndSettle();
@@ -216,5 +265,114 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Sua estante está vazia'), findsOneWidget);
     expect(find.text('Novo livro'), findsNothing);
+  });
+
+  testWidgets('CRUD: cria, edita, cancela e confirma exclusão', (tester) async {
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final repo = TestAuthRepository()
+      ..session = const AuthSession('u1', 'a@exemplo.com');
+    addTearDown(repo.changes.close);
+    await tester.pumpWidget(app(repo));
+    await tester.pumpAndSettle();
+    expect(find.text('Sua estante está vazia'), findsOneWidget);
+    // CREATE
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await preencherLivro(tester, 'Memórias Póstumas');
+    await tester.ensureVisible(find.text('Salvar livro'));
+    await tester.tap(find.text('Salvar livro'));
+    await tester.pumpAndSettle();
+    expect(livros.of('u1').single.titulo, 'Memórias Póstumas');
+    expect(find.text('1 livro cadastrado'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5)); // fecha o SnackBar
+    await tester.pumpAndSettle();
+    // UPDATE
+    await tester.tap(find.text('Memórias Póstumas'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Editar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Machado de Assis'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).at(0), 'Quincas Borba');
+    await tester.ensureVisible(find.text('Salvar alterações'));
+    await tester.tap(find.text('Salvar alterações'));
+    await tester.pumpAndSettle();
+    expect(livros.of('u1').single.titulo, 'Quincas Borba');
+    expect(find.text('Quincas Borba'), findsWidgets);
+    // DELETE cancelado
+    await tester.tap(find.byTooltip('Excluir'));
+    await tester.pumpAndSettle();
+    expect(find.text('Excluir livro?'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+    expect(livros.of('u1'), hasLength(1));
+    // DELETE confirmado
+    await tester.tap(find.byTooltip('Excluir'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Excluir'));
+    await tester.pumpAndSettle();
+    expect(livros.of('u1'), isEmpty);
+    expect(find.text('Sua estante está vazia'), findsOneWidget);
+  });
+
+  testWidgets('Salvar mostra loading, bloqueia duplicação e trata erro',
+      (tester) async {
+    final repo = TestAuthRepository()
+      ..session = const AuthSession('u1', 'a@exemplo.com');
+    addTearDown(repo.changes.close);
+    await tester.pumpWidget(app(repo));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await preencherLivro(tester, 'Iracema');
+    livros
+      ..pending = Completer<void>()
+      ..failure = const LivroFailure('Sem conexão com o servidor.');
+    await tester.ensureVisible(find.text('Salvar livro'));
+    await tester.tap(find.text('Salvar livro'));
+    await tester.pump();
+    expect(find.text('Salvando…'), findsOneWidget);
+    livros.pending!.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Sem conexão com o servidor.'), findsOneWidget);
+    expect(find.text('Salvar livro'), findsOneWidget);
+    expect(livros.of('u1'), isEmpty);
+  });
+
+  testWidgets('Falha ao carregar mostra erro e permite tentar novamente',
+      (tester) async {
+    final repo = TestAuthRepository()
+      ..session = const AuthSession('u1', 'a@exemplo.com');
+    addTearDown(repo.changes.close);
+    livros.failure = const LivroFailure('Você não tem permissão.');
+    await tester.pumpWidget(app(repo));
+    await tester.pumpAndSettle();
+    expect(find.text('Você não tem permissão.'), findsOneWidget);
+    livros.failure = null;
+    await tester.tap(find.text('Tentar novamente'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sua estante está vazia'), findsOneWidget);
+  });
+
+  test('Livro converte para o documento do Firestore', () {
+    const livro = Livro(
+        titulo: 'A',
+        autor: 'B',
+        genero: 'C',
+        status: StatusLeitura.concluido,
+        nota: 5);
+    final map = livro.toMap();
+    expect(map, {
+      'title': 'A',
+      'author': 'B',
+      'genre': 'C',
+      'status': 'concluido',
+      'rating': 5
+    });
+    final lido = Livro.fromMap('id1', map);
+    expect(lido.id, 'id1');
+    expect(lido.status, StatusLeitura.concluido);
+    expect(messageForFirestoreCode('permission-denied'), contains('permissão'));
   });
 }

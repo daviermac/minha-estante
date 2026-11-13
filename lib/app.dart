@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'data/auth_repository.dart';
+import 'data/livro_repository.dart';
 import 'ui/auth/auth_screen.dart';
 import 'ui/library/library_area.dart';
 
@@ -22,8 +23,10 @@ ThemeData estanteTheme() => ThemeData(
     );
 
 class MinhaEstanteApp extends StatefulWidget {
-  const MinhaEstanteApp({super.key, required this.repository});
+  const MinhaEstanteApp(
+      {super.key, required this.repository, required this.livros});
   final AuthRepository repository;
+  final LivroRepository livros;
   @override
   State<MinhaEstanteApp> createState() => _MinhaEstanteAppState();
 }
@@ -64,6 +67,7 @@ class _MinhaEstanteAppState extends State<MinhaEstanteApp> {
           return LibraryArea(
             key: ValueKey(session.uid),
             repository: widget.repository,
+            livros: widget.livros,
             session: session,
           );
         },

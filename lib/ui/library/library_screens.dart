@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../data/livro_repository.dart';
 import '../../domain/livro.dart';
 
 const _ink = Color(0xFF1B3040);
@@ -12,10 +13,15 @@ class EstanteTela extends StatelessWidget {
     required this.onAbrirLivro,
     required this.onSair,
     required this.email,
+    this.erro,
+    this.onTentarNovamente,
     this.saindo = false,
   });
 
-  final List<Livro> livros;
+  /// Nulo enquanto os dados do Firestore estão carregando.
+  final List<Livro>? livros;
+  final String? erro;
+  final VoidCallback? onTentarNovamente;
   final VoidCallback onAdicionar;
   final ValueChanged<Livro> onAbrirLivro;
   final VoidCallback onSair;
@@ -24,6 +30,8 @@ class EstanteTela extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final livros = this.livros ?? const <Livro>[];
+    final carregando = this.livros == null && erro == null;
     return Scaffold(
       appBar: AppBar(title: const Text('Minha Estante'), actions: [
         TextButton.icon(
@@ -59,62 +67,109 @@ class EstanteTela extends StatelessWidget {
                       )),
               const SizedBox(height: 6),
               Text(
-                livros.isEmpty
+                carregando || erro != null || livros.isEmpty
                     ? 'Organize e acompanhe suas próximas leituras.'
                     : '${livros.length} ${livros.length == 1 ? 'livro cadastrado' : 'livros cadastrados'}',
                 style: TextStyle(color: Colors.blueGrey.shade700),
               ),
               const SizedBox(height: 24),
               Expanded(
-                child: livros.isEmpty
-                    ? _EstadoVazio(onAdicionar: onAdicionar)
-                    : ListView.separated(
-                        itemCount: livros.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final livro = livros[index];
-                          return Card(
-                            margin: EdgeInsets.zero,
-                            color: Colors.white,
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => onAbrirLivro(livro),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.menu_book_rounded,
-                                        color: _teal, size: 36),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(livro.titulo,
-                                              style: const TextStyle(
-                                                color: _ink,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 16,
-                                              )),
-                                          const SizedBox(height: 4),
-                                          Text(livro.autor),
-                                          const SizedBox(height: 8),
-                                          _StatusChip(status: livro.status),
-                                        ],
+                child: erro != null
+                    ? _EstadoErro(
+                        mensagem: erro!, onTentarNovamente: onTentarNovamente)
+                    : carregando
+                        ? const Center(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                CircularProgressIndicator(),
+                                SizedBox(height: 16),
+                                Text('Carregando sua estante…'),
+                              ]))
+                        : livros.isEmpty
+                            ? _EstadoVazio(onAdicionar: onAdicionar)
+                            : ListView.separated(
+                                itemCount: livros.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 12),
+                                itemBuilder: (context, index) {
+                                  final livro = livros[index];
+                                  return Card(
+                                    margin: EdgeInsets.zero,
+                                    color: Colors.white,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(12),
+                                      onTap: () => onAbrirLivro(livro),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.menu_book_rounded,
+                                                color: _teal, size: 36),
+                                            const SizedBox(width: 14),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(livro.titulo,
+                                                      style: const TextStyle(
+                                                        color: _ink,
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        fontSize: 16,
+                                                      )),
+                                                  const SizedBox(height: 4),
+                                                  Text(livro.autor),
+                                                  const SizedBox(height: 8),
+                                                  _StatusChip(
+                                                      status: livro.status),
+                                                ],
+                                              ),
+                                            ),
+                                            const Icon(Icons.chevron_right),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    const Icon(Icons.chevron_right),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
-                            ),
-                          );
-                        },
-                      ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EstadoErro extends StatelessWidget {
+  const _EstadoErro({required this.mensagem, this.onTentarNovamente});
+
+  final String mensagem;
+  final VoidCallback? onTentarNovamente;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 320),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_rounded,
+                color: Color(0xFFB3261E), size: 64),
+            const SizedBox(height: 16),
+            Text(mensagem, textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            if (onTentarNovamente != null)
+              OutlinedButton.icon(
+                onPressed: onTentarNovamente,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Tentar novamente'),
+              ),
+          ],
         ),
       ),
     );
@@ -158,20 +213,28 @@ class _EstadoVazio extends StatelessWidget {
   }
 }
 
-class CadastroLivroTela extends StatefulWidget {
-  const CadastroLivroTela({super.key});
+/// Formulário usado para CREATE (livro nulo) e UPDATE (livro preenchido).
+class FormularioLivroTela extends StatefulWidget {
+  const FormularioLivroTela({super.key, this.livro, required this.onSalvar});
+
+  final Livro? livro;
+  final Future<void> Function(Livro livro) onSalvar;
 
   @override
-  State<CadastroLivroTela> createState() => _CadastroLivroTelaState();
+  State<FormularioLivroTela> createState() => _FormularioLivroTelaState();
 }
 
-class _CadastroLivroTelaState extends State<CadastroLivroTela> {
+class _FormularioLivroTelaState extends State<FormularioLivroTela> {
   final _formKey = GlobalKey<FormState>();
-  final _titulo = TextEditingController();
-  final _autor = TextEditingController();
-  final _genero = TextEditingController();
-  StatusLeitura? _status;
-  int? _nota;
+  late final _titulo = TextEditingController(text: widget.livro?.titulo);
+  late final _autor = TextEditingController(text: widget.livro?.autor);
+  late final _genero = TextEditingController(text: widget.livro?.genero);
+  late StatusLeitura? _status = widget.livro?.status;
+  late int? _nota = widget.livro?.nota;
+  bool _salvando = false;
+  String? _erro;
+
+  bool get _editando => widget.livro != null;
 
   @override
   void dispose() {
@@ -186,23 +249,38 @@ class _CadastroLivroTelaState extends State<CadastroLivroTela> {
     return null;
   }
 
-  void _salvar() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop(
-      Livro(
+  Future<void> _salvar() async {
+    if (_salvando || !_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _salvando = true;
+      _erro = null;
+    });
+    try {
+      await widget.onSalvar(Livro(
         titulo: _titulo.text.trim(),
         autor: _autor.text.trim(),
         genero: _genero.text.trim(),
         status: _status!,
         nota: _nota!,
-      ),
-    );
+      ));
+      if (mounted) Navigator.of(context).pop(true);
+    } on LivroFailure catch (failure) {
+      if (mounted) setState(() => _erro = failure.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _erro = 'Não foi possível salvar. Tente novamente.');
+      }
+    } finally {
+      if (mounted) setState(() => _salvando = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Cadastrar livro')),
+      appBar:
+          AppBar(title: Text(_editando ? 'Editar livro' : 'Cadastrar livro')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -212,14 +290,16 @@ class _CadastroLivroTelaState extends State<CadastroLivroTela> {
               child: ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
-                  Text('Novo livro',
+                  Text(_editando ? 'Editar livro' : 'Novo livro',
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: _ink,
                                 fontWeight: FontWeight.bold,
                               )),
                   const SizedBox(height: 6),
-                  const Text('Preencha os dados para adicionar à sua estante.'),
+                  Text(_editando
+                      ? 'Altere os dados e salve para atualizar sua estante.'
+                      : 'Preencha os dados para adicionar à sua estante.'),
                   const SizedBox(height: 24),
                   TextFormField(
                     controller: _titulo,
@@ -274,11 +354,25 @@ class _CadastroLivroTelaState extends State<CadastroLivroTela> {
                   const SizedBox(height: 12),
                   const Text('* Campos obrigatórios',
                       style: TextStyle(color: Colors.black54)),
+                  if (_erro != null) ...[
+                    const SizedBox(height: 16),
+                    Text(_erro!,
+                        style: const TextStyle(color: Color(0xFFB3261E))),
+                  ],
                   const SizedBox(height: 28),
                   FilledButton.icon(
-                    onPressed: _salvar,
-                    icon: const Icon(Icons.check),
-                    label: const Text('Salvar livro'),
+                    onPressed: _salvando ? null : _salvar,
+                    icon: _salvando
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.check),
+                    label: Text(_salvando
+                        ? 'Salvando…'
+                        : _editando
+                            ? 'Salvar alterações'
+                            : 'Salvar livro'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                     ),
@@ -293,15 +387,81 @@ class _CadastroLivroTelaState extends State<CadastroLivroTela> {
   }
 }
 
-class DetalhesLivroTela extends StatelessWidget {
-  const DetalhesLivroTela({super.key, required this.livro});
+class DetalhesLivroTela extends StatefulWidget {
+  const DetalhesLivroTela({
+    super.key,
+    required this.livro,
+    required this.onEditar,
+    required this.onExcluir,
+  });
 
   final Livro livro;
+  final VoidCallback onEditar;
+  final Future<void> Function() onExcluir;
+
+  @override
+  State<DetalhesLivroTela> createState() => _DetalhesLivroTelaState();
+}
+
+class _DetalhesLivroTelaState extends State<DetalhesLivroTela> {
+  bool _excluindo = false;
+
+  Future<void> _confirmarExclusao() async {
+    if (_excluindo) return;
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Excluir livro?'),
+        content: Text(
+            '“${widget.livro.titulo}” será removido definitivamente da sua estante.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFB3261E)),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Excluir')),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+    setState(() => _excluindo = true);
+    try {
+      await widget.onExcluir();
+    } on LivroFailure catch (failure) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(failure.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _excluindo = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final livro = widget.livro;
     return Scaffold(
-      appBar: AppBar(title: const Text('Detalhes do livro')),
+      appBar: AppBar(title: const Text('Detalhes do livro'), actions: [
+        IconButton(
+          tooltip: 'Editar',
+          onPressed: _excluindo ? null : widget.onEditar,
+          icon: const Icon(Icons.edit_outlined),
+        ),
+        IconButton(
+          tooltip: 'Excluir',
+          onPressed: _excluindo ? null : _confirmarExclusao,
+          icon: _excluindo
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.delete_outline),
+        ),
+      ]),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -372,6 +532,26 @@ class DetalhesLivroTela extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(height: 20),
+                Row(children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _excluindo ? null : widget.onEditar,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar livro'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFB3261E)),
+                      onPressed: _excluindo ? null : _confirmarExclusao,
+                      icon: const Icon(Icons.delete_outline),
+                      label: Text(_excluindo ? 'Excluindo…' : 'Excluir livro'),
+                    ),
+                  ),
+                ]),
               ],
             ),
           ),

@@ -32,8 +32,9 @@ class _BootstrapState extends State<_Bootstrap> {
   Widget build(BuildContext context) => FutureBuilder<AuthRepository>(
         future: _initialization,
         builder: (context, snapshot) {
-          if (snapshot.hasData)
+          if (snapshot.hasData) {
             return MinhaEstanteApp(repository: snapshot.data!);
+          }
           return MaterialApp(
             title: 'Minha Estante',
             debugShowCheckedModeBanner: false,

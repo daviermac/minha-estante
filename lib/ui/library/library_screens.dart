@@ -243,7 +243,7 @@ class _CadastroLivroTelaState extends State<CadastroLivroTela> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<StatusLeitura>(
-                    value: _status,
+                    initialValue: _status,
                     decoration:
                         const InputDecoration(labelText: 'Status de leitura *'),
                     items: StatusLeitura.values
@@ -256,7 +256,7 @@ class _CadastroLivroTelaState extends State<CadastroLivroTela> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
-                    value: _nota,
+                    initialValue: _nota,
                     decoration:
                         const InputDecoration(labelText: 'Nota / avaliação *'),
                     items: List.generate(
